@@ -1,185 +1,100 @@
-# ⚡ Smart Grid GenAI — Natural Language Query Assistant
+# ⚡ Smart Grid GenAI
 
-> A conversational GenAI system that allows users to query smart-grid monitoring data using natural language instead of writing SQL manually.
+### Natural Language → SQL → Smart Grid Insights
 
-[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-blue.svg)](https://www.postgresql.org/)
-[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-black.svg)](https://ollama.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-App-red.svg)](https://streamlit.io/)
+An AI-powered Natural Language Query system that allows users to interact with smart-grid monitoring data using simple questions instead of writing SQL queries manually.
 
 ---
 
-## 🎯 Why This Project?
+## 🚀 What is this?
 
-Smart-grid monitoring systems continuously generate structured data containing voltage, current, power, energy consumption, feeders, transformers, and timestamps.
+Smart-grid systems generate large amounts of data such as:
 
-Traditionally, extracting insights from this data requires users to know SQL.
+- ⚡ Power
+- 🔌 Voltage
+- 📊 Current
+- 🔋 Energy consumption
+- 🏭 Transformers
+- 🔗 Feeders
+- 🕒 Timestamped measurements
 
-This project solves that problem by introducing a **natural-language interface over PostgreSQL**.
+Normally, users need SQL knowledge to analyze this data.
 
-A user can simply ask:
+**Smart Grid GenAI solves this by providing a conversational interface powered by a local Large Language Model (LLM).**
 
-> **"Which transformer has the highest average power?"**
+### Example
 
-The system understands the question, generates the appropriate SQL query using a local LLM, validates the query, executes it against PostgreSQL, and converts the result into a human-readable answer.
+**User asks:**
 
-### Core Pipeline
+> Which transformer has the highest average power?
 
-```text
-Natural Language
-       ↓
-     LLM
-       ↓
-   SQL Generation
-       ↓
-   SQL Validation
-       ↓
-   PostgreSQL
-       ↓
-   Query Result
-       ↓
-  AI Answer Generation
-       ↓
- Human-readable Response
-✨ Key Features
-🗣️ Natural Language Database Querying
-🤖 Local LLM-powered Text-to-SQL
-🐘 PostgreSQL Smart-Grid Database
-🔒 SQL Validation and Read-only Query Control
-💬 Conversational Follow-up Questions
-🧠 Context-aware queries
-⚡ Smart-grid specific analytics
-🖥️ Interactive Streamlit interface
-🔐 Local LLM execution without sending database data to an external AI API
-🧠 How It Works
-1. User asks a question
+**AI generates:**
 
-Example:
-
-Which feeder has the highest power?
-2. LLM generates SQL
-
-The local Llama 3 model converts the question into SQL:
-
-SELECT feeder_id, power
+```sql
+SELECT transformer_id,
+       AVG(power) AS average_power
 FROM power_measurements
-ORDER BY power DESC
+GROUP BY transformer_id
+ORDER BY average_power DESC
 LIMIT 1;
-3. SQL validation
 
-Before execution, the generated query passes through a validation layer.
+System responds:
 
-The application allows read-only SELECT queries and blocks database modification operations such as:
+The transformer with the highest average power is TR_01.
 
-INSERT
-UPDATE
-DELETE
-DROP
-ALTER
-TRUNCATE
-CREATE
-GRANT
-REVOKE
-4. PostgreSQL execution
-
-The validated query is executed against the smart_grid PostgreSQL database.
-
-5. Result generation
-
-The database result is passed to the answer-generation layer and converted into a concise natural-language response.
-
-6. Conversational context
-
-The system can use previous conversation context for follow-up questions.
-
-Example:
-
-User:
-Which feeder has the highest power?
-
-AI:
-The feeder with the highest power is F_01.
-
-User:
-What is its voltage?
-
-AI:
-The latest voltage measurement for F_01 is ...
-
-This allows the user to interact with the database conversationally rather than treating every query as an isolated request.
-
+✨ Key Features
+🤖 Natural Language to SQL
+🧠 Local LLM using Ollama + Llama 3
+🐘 PostgreSQL database integration
+🔒 SQL validation before execution
+💬 Conversational follow-up questions
+📊 Smart-grid data analysis
+🖥️ Interactive Streamlit interface
+🔐 Local AI processing
 🏗️ Architecture
-┌─────────────────────────────┐
-│            User             │
-│   Natural Language Query    │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│       Streamlit UI          │
-│          app.py             │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│       Local LLM             │
-│      Ollama + Llama 3       │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│       Text-to-SQL           │
-│        llm_sql.py           │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│       SQL Validator         │
-│    sql_validator.py         │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│        PostgreSQL           │
-│        smart_grid           │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│       Query Engine          │
-│      query_engine.py        │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│     Answer Generator        │
-│    answer_generator.py      │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│     Natural Language        │
-│          Answer             │
-└─────────────────────────────┘
-🛠️ Technology Stack
-Layer	Technology
-Language	Python
-LLM Runtime	Ollama
-LLM	Llama 3 8B
-Database	PostgreSQL
-Database Driver	Psycopg2
-Frontend	Streamlit
-Query Language	SQL
-Version Control	Git
-Repository	GitHub
-📊 Smart-Grid Data Model
-
-The system currently works with a PostgreSQL table:
-
+        👤 User
+          │
+          ▼
+   Natural Language
+          │
+          ▼
+   🤖 Llama 3 / Ollama
+          │
+          ▼
+     SQL Generation
+          │
+          ▼
+     🔒 SQL Validator
+          │
+          ▼
+     🐘 PostgreSQL
+          │
+          ▼
+     Query Results
+          │
+          ▼
+    🧠 AI Answer
+          │
+          ▼
+    💬 User Response
+🛠️ Tech Stack
+Technology	Purpose
+🐍 Python	Application development
+🤖 Ollama	Local LLM runtime
+🧠 Llama 3 8B	Text-to-SQL & answer generation
+🐘 PostgreSQL	Database
+🔗 Psycopg2	Database connectivity
+🖥️ Streamlit	Web interface
+🗃️ SQL	Data querying
+🔧 Git & GitHub	Version control
+📊 Database
+Database
+smart_grid
+Main Table
 power_measurements
-Schema
+Columns
 Column	Description
-id	Unique measurement identifier
+id	Measurement ID
 timestamp	Measurement time
 transformer_id	Transformer identifier
 feeder_id	Feeder identifier
@@ -188,46 +103,48 @@ current	Current measurement
 power	Power measurement
 energy_consumption	Energy consumption
 
-The current development dataset contains 80 measurement records.
+Current development dataset:
 
-💬 Example Queries
+80 power measurement records
 
-The system supports questions such as:
+💬 Example Questions
 
-Power Analysis
+The system can understand questions such as:
+
 Which feeder has the highest power?
-Which feeder has the lowest power?
-What is the average power of each feeder?
-Transformer Analysis
 Which transformer has the highest average power?
-What is the average power of transformer TR_01?
-Voltage & Current
-Which measurement has the highest voltage?
-What is the latest voltage of feeder F_01?
-What is the latest current of feeder F_01?
-Energy Analysis
+What is the average power of each feeder?
 Which feeder has the highest energy consumption?
-Database Queries
-How many power measurements are in the database?
-🔒 AI-Generated SQL Safety
+What is the latest voltage of feeder F_01?
+How many power measurements are available?
+🔒 SQL Safety
 
-LLMs can generate incorrect or unsafe SQL.
+AI-generated SQL is not directly executed.
 
-Instead of directly executing model output, this project introduces a validation layer between the LLM and PostgreSQL.
+The system first validates the generated query.
 
 LLM
- │
- ▼
+ ↓
 Generated SQL
- │
- ▼
-Validation
- │
- ├── Unsafe → Reject
- │
- └── Valid SELECT → Execute
+ ↓
+SQL Validation
+ ↓
+Safe SELECT Query
+ ↓
+PostgreSQL
 
-This provides an additional control boundary before AI-generated queries reach the database.
+Read-only queries are allowed, while operations such as:
+
+INSERT
+UPDATE
+DELETE
+DROP
+ALTER
+TRUNCATE
+
+are blocked.
+
+This provides an additional safety layer between the LLM and the database.
 
 📁 Project Structure
 smart-grid-genai/
@@ -238,12 +155,10 @@ smart-grid-genai/
 ├── db_test.py
 │
 ├── src/
-│   ├── __init__.py
 │   ├── sql_validator.py
 │   └── answer_generator.py
 │
 ├── data/
-│   ├── raw/
 │   └── processed/
 │       └── power_grid_clean.csv
 │
@@ -251,211 +166,72 @@ smart-grid-genai/
 ├── README.md
 └── .gitignore
 ⚙️ Setup
-Prerequisites
-
-Make sure the following are installed:
-
-Python 3.x
-PostgreSQL
-Ollama
-Git
-1. Clone the repository
+1. Clone
 git clone https://github.com/Vignesh14007/smart-grid-genai.git
 cd smart-grid-genai
-2. Create a virtual environment
+2. Create virtual environment
 python3 -m venv venv
-
-Activate it:
-
 source venv/bin/activate
 3. Install dependencies
 pip install -r requirements.txt
-4. Configure PostgreSQL
-
-Create the database:
-
-CREATE DATABASE smart_grid;
-
-Create the power_measurements table using the schema described above and load the processed dataset.
-
-Verify the data:
-
-SELECT COUNT(*) FROM power_measurements;
-5. Configure Ollama
-
-Check available models:
-
-ollama list
-
-The project uses:
-
-llama3:8b
-
-If it is not installed:
-
-ollama pull llama3:8b
-
-Test it:
-
+4. Start Ollama
 ollama run llama3:8b
-6. Configure database credentials
-
-Use environment variables for local credentials.
-
-Example:
-
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_NAME=smart_grid
-DB_USER=smartgrid_user
-DB_PASSWORD=your_password
-
-Do not commit credentials or .env files to GitHub.
-
-▶️ Run the Application
-
-Activate the virtual environment:
-
-source venv/bin/activate
-
-Start the Streamlit application:
-
+5. Start the application
 streamlit run app.py
 
-Then open:
+Open:
 
 http://localhost:8501
-🧪 Database Connection Test
+🎯 Project Highlights
+GenAI
 
-Run:
+Uses a local LLM to translate natural-language questions into SQL.
 
-python db_test.py
+Database Integration
 
-The application should successfully connect to PostgreSQL and report the available records.
+Connects the LLM workflow with a PostgreSQL smart-grid database.
 
-🧩 Core Modules
-app.py
+AI Safety
 
-Main Streamlit application.
+Validates generated SQL before allowing database execution.
 
-Handles:
+Conversational Interaction
 
-User interaction
-Conversation history
-Query workflow
-Result presentation
-llm_sql.py
+Supports natural follow-up questions instead of requiring users to write independent SQL queries.
 
-Handles natural-language-to-SQL generation using Ollama and Llama 3.
+Local AI
 
-query_engine.py
+Uses Ollama for local LLM inference, reducing dependency on external AI APIs.
 
-Handles PostgreSQL connectivity and SQL execution.
-
-src/sql_validator.py
-
-Cleans and validates LLM-generated SQL before database execution.
-
-src/answer_generator.py
-
-Converts database results into natural-language responses.
-
-db_test.py
-
-Verifies PostgreSQL connectivity and data availability.
-
-🎯 What Makes This Project Different?
-
-This project is not simply a chatbot.
-
-It combines:
-
-Generative AI
-      +
-Natural Language Processing
-      +
-Text-to-SQL
-      +
-Database Engineering
-      +
-SQL Safety
-      +
-Conversational Context
-      +
-Smart-Grid Analytics
-
-The important engineering challenge is the connection between an LLM and a structured database.
-
-The system must ensure that:
-
-The user's intent is understood.
-Correct SQL is generated.
-Generated SQL is validated.
-Only permitted queries reach the database.
-Database results are correctly interpreted.
-Follow-up questions retain context.
 🚀 Future Improvements
-
-The current system provides the foundation for a larger smart-grid intelligence platform.
-
-Potential extensions include:
-
-Real-time power monitoring
-Time-series visualization
-Feeder comparison dashboards
-Transformer health analysis
-Power anomaly detection
-Fault detection
-Automated alerts
-Historical trend analysis
-More robust Text-to-SQL evaluation
-Role-based database access
-Production deployment
-🎓 Skills Demonstrated
-
-This project demonstrates practical experience in:
-
-Generative AI
-Large Language Models
-Prompt Engineering
-Natural Language Processing
-Text-to-SQL
-Python
-PostgreSQL
-SQL
-Database Connectivity
-AI Output Validation
-Conversational AI
-Streamlit
-Local LLM Deployment
-Git & GitHub
+📈 Real-time power monitoring
+📊 Interactive analytics dashboards
+🚨 Power anomaly detection
+🔔 Automated alerts
+⚡ Feeder and transformer health analysis
+📅 Historical trend analysis
+🌐 Cloud deployment
+📱 Responsive monitoring interface
 👨‍💻 Author
 Vigneshwaran
 
 B.Tech Information Technology
 Kongu Engineering College
 
-Interested in:
-
+Interests:
 AI/ML • Generative AI • Data Science • Data Analytics
 
-⭐ Project Summary
+⭐ Core Idea
+Natural Language
+       ↓
+      LLM
+       ↓
+      SQL
+       ↓
+   Validation
+       ↓
+  PostgreSQL
+       ↓
+   AI Answer
 
-Smart Grid GenAI demonstrates how a local Large Language Model can be connected to a structured PostgreSQL smart-grid database to create a conversational data-access layer.
-
-Instead of asking users to learn SQL first, the system allows them to ask questions naturally and converts those questions into validated database queries.
-
-Natural Language → SQL → Validation → Database → AI Answer
-
-Built as an academic project with a focus on Generative AI, database interaction, and practical AI engineering.
-
-### One important thing
-
-Don't put your actual PostgreSQL password anywhere in this README or GitHub repository. Keep credentials in `.env` and put `.env` in `.gitignore`.
-
-After pasting the README:
-
-```bash
-nano README.md
-
-
+Making smart-grid data accessible through natural language.
