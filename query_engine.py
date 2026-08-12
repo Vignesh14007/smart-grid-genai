@@ -1,24 +1,36 @@
+import os
+
 import psycopg2
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 def get_connection():
+
     return psycopg2.connect(
-        host="127.0.0.1",
-        port=5432,
-        database="smart_grid",
-        user="smartgrid_user",
-        password="smartgrid123"
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
     )
 
 
 def execute_query(query):
+
     connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(query)
 
     results = cursor.fetchall()
-    columns = [description[0] for description in cursor.description]
+
+    columns = [
+        description[0]
+        for description in cursor.description
+    ]
 
     cursor.close()
     connection.close()
