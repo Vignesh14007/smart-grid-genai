@@ -2,171 +2,228 @@ import streamlit as st
 
 from llm_sql import generate_sql
 from query_engine import execute_query
+from src.sql_validator import clean_sql, validate_sql
+from src.answer_generator import generate_answer
 
 
-# -----------------------------
+# -----------------------------------------
 # Page configuration
-# -----------------------------
+# -----------------------------------------
 
 st.set_page_config(
-    page_title="Smart Grid AI Assistant",
+    page_title="Smart Grid AI",
     page_icon="⚡",
     layout="centered"
 )
 
 
-# -----------------------------
-# SQL utilities
-# -----------------------------
+# -----------------------------------------
+# Session state
+# -----------------------------------------
 
-def clean_sql(sql):
-    sql = sql.strip()
-    sql = sql.replace("```sql", "")
-    sql = sql.replace("```", "")
-    return sql.strip()
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 
-def validate_sql(sql):
-
-    sql_lower = sql.lower().strip()
-
-    if not sql_lower.startswith("select"):
-        raise ValueError("Only SELECT queries are allowed.")
-
-    blocked_keywords = [
-        "insert",
-        "update",
-        "delete",
-        "drop",
-        "alter",
-        "truncate",
-        "create",
-        "grant",
-        "revoke"
-    ]
-
-    for keyword in blocked_keywords:
-
-        if keyword in sql_lower:
-            raise ValueError(
-                f"Blocked SQL operation: {keyword}"
-            )
-
-
-# -----------------------------
-# AI answer
-# -----------------------------
-
-def generate_answer(question, sql, columns, results):
-
-    data = []
-
-    for row in results:
-        data.append(
-            dict(zip(columns, row))
-        )
-
-    from ollama import chat
-
-    prompt = f"""
-You are an assistant for a smart-grid monitoring system.
-
-Answer the user's question using ONLY the database result.
-
-User question:
-{question}
-
-Database result:
-{data}
-
-Rules:
-- Answer only using information explicitly present in the database result.
-- Never invent numbers, units, dates, identifiers, or measurements.
-- If information is not available, say that it is not available.
-- Give a clear and concise answer.
-- Do not mention SQL, Python, PostgreSQL, or Llama.
-"""
-
-    response = chat(
-        model="llama3:8b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
-
-    return response.message.content.strip()
-
-
-# -----------------------------
-# UI
-# -----------------------------
+# -----------------------------------------
+# Header
+# -----------------------------------------
 
 st.title("⚡ Smart Grid AI Assistant")
 
 st.write(
-    "Ask questions about power measurements "
+    "Ask questions about smart-grid power measurements "
     "using natural language."
 )
 
-question = st.text_input(
-    "Ask your question",
-    placeholder="Example: Which feeder has the highest power?"
+st.divider()
+
+
+# -----------------------------------------
+# Display conversation
+# -----------------------------------------
+
+for message in st.session_state.chat_history:
+
+    with st.chat_message(message["role"]):
+
+        st.write(message["content"])
+
+
+# -----------------------------------------
+# Chat input
+# -----------------------------------------
+
+question = st.chat_input(
+    "Ask about the smart grid..."
 )
 
 
-if st.button("Ask AI"):
+# -----------------------------------------
+# Process question
+# -----------------------------------------
 
-    if not question.strip():
+if question:
 
-        st.warning("Please enter a question.")
+    # -----------------------------------------
+    # Display user question
+    # -----------------------------------------
 
-    else:
+    with st.chat_message("user"):
+        st.write(question)
 
-        try:
+    # -----------------------------------------
+    # Save user question
+    # -----------------------------------------
 
-            with st.spinner("Analyzing your question..."):
+    st.session_state.chat_history.append(
+        {
+            "role": "user",
+            "content": question
+        }
+    )
 
-                # Natural language → SQL
-                sql = generate_sql(question)
+    try:
 
-                # Clean generated SQL
-                sql = clean_sql(sql)
+        # -----------------------------------------
+        # Build detailed conversation context
+        # -----------------------------------------
 
-                # Validate SQL
-                validate_sql(sql)
+        conversation_context = ""
 
-                # Execute SQL
-                columns, results = execute_query(sql)
+        for message in st.session_state.chat_history:
 
-                # Generate final answer
-                answer = generate_answer(
-                    question,
-                    sql,
-                    columns,
-                    results
+            conversation_context += (
+                f"{message['role'].upper()}: "
+                f"{message['content']}\n"
+            )
+
+            # Include SQL information when available
+            if "sql" in message:
+
+                conversation_context += (
+                    f"GENERATED SQL: "
+                    f"{message['sql']}\n"
                 )
 
-            st.subheader("AI Answer")
+            # Include database result when available
+            if "result" in message:
 
-            st.success(answer)
-
-            with st.expander("View generated SQL"):
-
-                st.code(
-                    sql,
-                    language="sql"
+                conversation_context += (
+                    f"DATABASE RESULT: "
+                    f"{message['result']}\n"
                 )
 
-            with st.expander("View database result"):
+
+        # -----------------------------------------
+        # Generate SQL
+        # -----------------------------------------
+
+        with st.spinner("Generating SQL..."):
+
+            sql = generate_sql(
+                question,
+                conversation_context
+            )
+
+            sql = clean_sql(sql)
+
+
+        # -----------------------------------------
+        # Validate SQL
+        # -----------------------------------------
+
+        validate_sql(sql)
+
+
+        # -----------------------------------------
+        # Execute SQL
+        # -----------------------------------------
+
+        with st.spinner(
+            "Querying smart-grid database..."
+        ):
+
+            columns, results = execute_query(sql)
+
+
+        # -----------------------------------------
+        # Generate AI answer
+        # -----------------------------------------
+
+        with st.spinner(
+            "Generating answer..."
+        ):
+
+            answer = generate_answer(
+                question,
+                columns,
+                results
+            )
+
+
+        # -----------------------------------------
+        # Save complete interaction
+        # -----------------------------------------
+
+        st.session_state.chat_history.append(
+            {
+                "role": "assistant",
+                "content": answer,
+                "sql": sql,
+                "result": results
+            }
+        )
+
+
+        # -----------------------------------------
+        # Display AI answer
+        # -----------------------------------------
+
+        with st.chat_message("assistant"):
+
+            st.write(answer)
+
+
+        # -----------------------------------------
+        # Display generated SQL
+        # -----------------------------------------
+
+        with st.expander(
+            "View Generated SQL"
+        ):
+
+            st.code(
+                sql,
+                language="sql"
+            )
+
+
+        # -----------------------------------------
+        # Display database result
+        # -----------------------------------------
+
+        with st.expander(
+            "View Database Result"
+        ):
+
+            if results:
 
                 st.dataframe(
-                    results
+                    results,
+                    use_container_width=True
                 )
 
-        except Exception as error:
+            else:
+
+                st.info(
+                    "No records found."
+                )
+
+
+    except Exception as error:
+
+        with st.chat_message("assistant"):
 
             st.error(
                 f"Something went wrong: {error}"

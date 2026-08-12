@@ -1,84 +1,65 @@
-from ollama import chat
+import ollama
 
 
-DATABASE_SCHEMA = """
-Database: smart_grid
-
-Table: power_measurements
-
-Columns:
-- id
-- timestamp
-- transformer_id
-- feeder_id
-- voltage
-- current
-- power
-- energy_consumption
-"""
-
-
-def generate_sql(question):
+def generate_sql(question, conversation_context=""):
 
     prompt = f"""
-You are an expert PostgreSQL SQL generator.
+You are an expert SQL generator for a smart-grid monitoring system.
 
-Your task is to convert the user's natural-language question
-into a PostgreSQL SQL query.
+Your job is to convert the user's natural-language question
+into a PostgreSQL SELECT query.
 
-DATABASE SCHEMA:
-{DATABASE_SCHEMA}
+Database table:
 
-STRICT RULES:
+power_measurements
 
-1. Use ONLY the table public.power_measurements.
-2. Never use smart_grid.power_measurements.
-3. Use ONLY the columns listed in the schema.
-4. Return ONLY one SELECT query.
-5. Do not return markdown.
-6. Do not explain the query.
-7. Do not use unnecessary JOINs.
-8. Do not invent tables or columns.
+Columns:
 
-9. For "which feeder has the highest power":
-   SELECT feeder_id, power
-   FROM public.power_measurements
-   ORDER BY power DESC
-   LIMIT 1;
+id
+timestamp
+transformer_id
+feeder_id
+voltage
+current
+power
+energy_consumption
 
-10. For "which feeder has the lowest power":
-    SELECT feeder_id, power
-    FROM public.power_measurements
-    ORDER BY power ASC
-    LIMIT 1;
+Important rules:
 
-11. For "which transformer has the highest average power":
-    SELECT transformer_id, AVG(power) AS average_power
-    FROM public.power_measurements
-    GROUP BY transformer_id
-    ORDER BY average_power DESC
-    LIMIT 1;
+1. Generate ONLY a PostgreSQL SELECT query.
+2. Use only the power_measurements table.
+3. Do not generate INSERT, UPDATE, DELETE, DROP, ALTER, CREATE,
+   TRUNCATE, GRANT, REVOKE, or other modification queries.
+4. Do not use tables that do not exist.
+5. If aggregation is required, use GROUP BY correctly.
+6. If the question asks for the highest value, use ORDER BY ... DESC.
+7. If the question asks for the lowest value, use ORDER BY ... ASC.
+8. Return ONLY SQL.
+9. Do not use markdown code blocks.
+10. Use previous conversation context when the current question
+    refers to something such as "it", "its", "that feeder",
+    "that transformer", "same feeder", or "previous result".
+11. When the user asks for a single measurement such as voltage,
+    current, power, or energy_consumption for a feeder or transformer,
+    return the latest available measurement.
+12. For the latest measurement, use:
+    ORDER BY timestamp DESC
+    LIMIT 1
+13. If the user explicitly asks for average, maximum, minimum,
+    total, or a time range, perform the requested calculation
+    instead of using the latest measurement.
+Previous conversation:
 
-12. For "which transformer has the lowest average power":
-    SELECT transformer_id, AVG(power) AS average_power
-    FROM public.power_measurements
-    GROUP BY transformer_id
-    ORDER BY average_power ASC
-    LIMIT 1;
+{conversation_context}
 
-13. If the user asks "which [entity] has the highest/lowest [measurement]",
-    return the entity identifier AND the corresponding measurement value.
+Current question:
 
-14. Do not select a normal column together with MAX() or MIN()
-    unless the query uses GROUP BY or a correct subquery.
-
-15. Use PostgreSQL-compatible SQL.
-
-USER QUESTION:
 {question}
+
+Generate the PostgreSQL SELECT query now.
 """
 
-    response = chat(
+    response = ollama.chat(
         model="llama3:8b",
         messages=[
             {
@@ -88,14 +69,4 @@ USER QUESTION:
         ]
     )
 
-    return response.message.content.strip()
-
-
-if __name__ == "__main__":
-
-    question = input("Ask your question: ")
-
-    sql = generate_sql(question)
-
-    print("\nGenerated SQL:")
-    print(sql)
+    return response["message"]["content"].strip()
