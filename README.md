@@ -457,7 +457,7 @@ Current implementation:
 B.Tech Information Technology  
 Kongu Engineering College
 
-**Interests:** AI/ML · Generative AI · Data Science · Data Analytics
+**Interests:** AI/ML · Generative AI 
 
 ---
 
