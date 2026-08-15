@@ -1,9 +1,23 @@
+import logging
+
 import streamlit as st
 
 from llm_sql import generate_sql
 from query_engine import execute_query
 from src.sql_validator import clean_sql, validate_sql
 from src.answer_generator import generate_answer
+
+
+# ============================================================
+# LOGGING
+# ============================================================
+
+logging.basicConfig(
+    level=logging.ERROR,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -20,7 +34,7 @@ st.set_page_config(
 
 # ============================================================
 # CUSTOM CSS
-# White + Sky Blue Glassmorphism
+# White + Sky Blue
 # ============================================================
 
 st.markdown(
@@ -245,10 +259,6 @@ st.markdown(
 # ============================================================
 
 def is_greeting(question):
-    """
-    Detect common conversational messages so they
-    do not enter the SQL pipeline.
-    """
 
     text = question.lower().strip()
 
@@ -259,26 +269,20 @@ def is_greeting(question):
         "hello",
         "hey",
         "hai",
-
         "hi there",
         "hello there",
         "hey there",
-
         "good morning",
         "good afternoon",
         "good evening",
         "good night",
-
         "thanks",
         "thank you",
         "thankyou",
-
         "what can you do",
         "what can you do?",
-
         "who are you",
         "who are you?",
-
         "what are you",
         "what are you?"
     }
@@ -291,15 +295,8 @@ def is_greeting(question):
 # ============================================================
 
 def greeting_response(question):
-    """
-    Return a natural response for simple conversational input.
-    """
 
     text = question.lower().strip()
-
-    # ---------------------------------------------
-    # Basic greetings
-    # ---------------------------------------------
 
     if text in {
         "hi",
@@ -320,20 +317,12 @@ def greeting_response(question):
             "current, or energy consumption."
         )
 
-    # ---------------------------------------------
-    # Morning
-    # ---------------------------------------------
-
     if text == "good morning":
 
         return (
             "Good morning! 👋 "
             "I'm ready to help you analyze the smart-grid data."
         )
-
-    # ---------------------------------------------
-    # Afternoon
-    # ---------------------------------------------
 
     if text == "good afternoon":
 
@@ -342,10 +331,6 @@ def greeting_response(question):
             "What would you like to know about the smart-grid data?"
         )
 
-    # ---------------------------------------------
-    # Evening
-    # ---------------------------------------------
-
     if text == "good evening":
 
         return (
@@ -353,20 +338,12 @@ def greeting_response(question):
             "Ask me anything about the smart-grid measurements."
         )
 
-    # ---------------------------------------------
-    # Night
-    # ---------------------------------------------
-
     if text == "good night":
 
         return (
             "Good night! 👋 "
             "See you next time."
         )
-
-    # ---------------------------------------------
-    # Thanks
-    # ---------------------------------------------
 
     if text in {
         "thanks",
@@ -379,10 +356,6 @@ def greeting_response(question):
             "Feel free to ask another smart-grid question."
         )
 
-    # ---------------------------------------------
-    # Capabilities
-    # ---------------------------------------------
-
     if text in {
         "what can you do",
         "what can you do?"
@@ -394,10 +367,6 @@ def greeting_response(question):
             "measurements such as power, voltage, current, "
             "feeders, transformers, and energy consumption."
         )
-
-    # ---------------------------------------------
-    # Identity
-    # ---------------------------------------------
 
     if text in {
         "who are you",
@@ -422,18 +391,10 @@ def greeting_response(question):
 # ============================================================
 
 def is_smart_grid_question(question):
-    """
-    Check whether a question belongs to the smart-grid
-    monitoring domain.
-    """
 
     text = question.lower().strip()
 
     keywords = [
-
-        # -----------------------------------------
-        # Grid
-        # -----------------------------------------
 
         "smart grid",
         "smart-grid",
@@ -442,18 +403,10 @@ def is_smart_grid_question(question):
         "electricity",
         "electrical",
 
-        # -----------------------------------------
-        # Equipment
-        # -----------------------------------------
-
         "feeder",
         "feeders",
         "transformer",
         "transformers",
-
-        # -----------------------------------------
-        # Measurements
-        # -----------------------------------------
 
         "power",
         "voltage",
@@ -463,10 +416,6 @@ def is_smart_grid_question(question):
         "consumption",
         "measurement",
         "measurements",
-
-        # -----------------------------------------
-        # Analysis
-        # -----------------------------------------
 
         "highest power",
         "lowest power",
@@ -487,20 +436,12 @@ def is_smart_grid_question(question):
         "lowest energy",
         "average energy",
 
-        # -----------------------------------------
-        # Data
-        # -----------------------------------------
-
         "reading",
         "readings",
         "database",
         "data",
         "record",
         "records",
-
-        # -----------------------------------------
-        # Dataset identifiers
-        # -----------------------------------------
 
         "f_01",
         "f_02",
@@ -578,10 +519,6 @@ for message in st.session_state.chat_history:
 
         st.markdown(message["content"])
 
-        # ---------------------------------------------
-        # Generated SQL
-        # ---------------------------------------------
-
         if (
             role == "assistant"
             and message.get("sql")
@@ -593,10 +530,6 @@ for message in st.session_state.chat_history:
                     message["sql"],
                     language="sql"
                 )
-
-        # ---------------------------------------------
-        # Database result
-        # ---------------------------------------------
 
         if (
             role == "assistant"
@@ -658,7 +591,7 @@ if question:
 
 
     # ========================================================
-    # STEP 1 — GREETING CHECK
+    # GREETING CHECK
     # ========================================================
 
     if is_greeting(question):
@@ -683,7 +616,7 @@ if question:
 
 
     # ========================================================
-    # STEP 2 — SMART GRID DOMAIN CHECK
+    # DOMAIN CHECK
     # ========================================================
 
     if not is_smart_grid_question(question):
@@ -708,7 +641,7 @@ if question:
 
 
     # ========================================================
-    # STEP 3 — BUILD CONTEXT
+    # MAIN PIPELINE
     # ========================================================
 
     try:
@@ -718,9 +651,9 @@ if question:
         )
 
 
-        # ====================================================
-        # STEP 4 — GENERATE SQL
-        # ====================================================
+        # ----------------------------------------------------
+        # Generate SQL
+        # ----------------------------------------------------
 
         with st.chat_message(
             "assistant",
@@ -739,16 +672,16 @@ if question:
                 sql = clean_sql(sql)
 
 
-            # =================================================
-            # STEP 5 — VALIDATE SQL
-            # =================================================
+            # ------------------------------------------------
+            # Validate SQL
+            # ------------------------------------------------
 
             validate_sql(sql)
 
 
-            # =================================================
-            # STEP 6 — EXECUTE SQL
-            # =================================================
+            # ------------------------------------------------
+            # Execute SQL
+            # ------------------------------------------------
 
             with st.spinner(
                 "Querying PostgreSQL..."
@@ -757,9 +690,9 @@ if question:
                 columns, results = execute_query(sql)
 
 
-            # =================================================
-            # STEP 7 — GENERATE AI ANSWER
-            # =================================================
+            # ------------------------------------------------
+            # Generate AI answer
+            # ------------------------------------------------
 
             with st.spinner(
                 "Preparing the answer..."
@@ -772,16 +705,16 @@ if question:
                 )
 
 
-            # =================================================
-            # DISPLAY ANSWER
-            # =================================================
+            # ------------------------------------------------
+            # Display answer
+            # ------------------------------------------------
 
             st.markdown(answer)
 
 
-            # =================================================
-            # DISPLAY SQL
-            # =================================================
+            # ------------------------------------------------
+            # Generated SQL
+            # ------------------------------------------------
 
             with st.expander(
                 "View generated SQL"
@@ -793,9 +726,9 @@ if question:
                 )
 
 
-            # =================================================
-            # DISPLAY DATABASE RESULT
-            # =================================================
+            # ------------------------------------------------
+            # Database result
+            # ------------------------------------------------
 
             with st.expander(
                 "View database result"
@@ -816,9 +749,9 @@ if question:
                     )
 
 
-        # ====================================================
-        # SAVE ASSISTANT RESPONSE
-        # ====================================================
+        # ----------------------------------------------------
+        # Save complete interaction
+        # ----------------------------------------------------
 
         st.session_state.chat_history.append(
             {
@@ -831,13 +764,21 @@ if question:
 
 
     # ========================================================
-    # ERROR HANDLING
+    # VALIDATION / USER INPUT ERROR
     # ========================================================
 
-    except Exception as error:
+    except ValueError as error:
 
-        error_message = (
-            f"Unable to process the request: {error}"
+        logger.warning(
+            "Validation error while processing question: %s",
+            error
+        )
+
+        user_message = (
+            "I couldn't process that request. "
+            "Please ask a question about the smart-grid "
+            "measurements, such as power, voltage, current, "
+            "energy, feeders, or transformers."
         )
 
         with st.chat_message(
@@ -845,11 +786,41 @@ if question:
             avatar="⚡"
         ):
 
-            st.error(error_message)
+            st.warning(user_message)
 
         st.session_state.chat_history.append(
             {
                 "role": "assistant",
-                "content": error_message
+                "content": user_message
+            }
+        )
+
+
+    # ========================================================
+    # UNEXPECTED ERROR
+    # ========================================================
+
+    except Exception:
+
+        logger.exception(
+            "Unexpected error while processing request"
+        )
+
+        user_message = (
+            "Something went wrong while processing your "
+            "request. Please try again."
+        )
+
+        with st.chat_message(
+            "assistant",
+            avatar="⚡"
+        ):
+
+            st.error(user_message)
+
+        st.session_state.chat_history.append(
+            {
+                "role": "assistant",
+                "content": user_message
             }
         )
