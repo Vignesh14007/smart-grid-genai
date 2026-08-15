@@ -1,10 +1,10 @@
-from ollama import chat
-
-
 def generate_answer(question, columns, results):
     """
     Convert database results into a concise,
-    human-readable answer using the local LLM.
+    human-readable answer.
+
+    The database result is the source of truth.
+    No additional LLM call is required.
     """
 
     # --------------------------------------------------------
@@ -18,68 +18,157 @@ def generate_answer(question, columns, results):
         )
 
     # --------------------------------------------------------
-    # Convert database result into readable text
+    # Convert database rows into dictionaries
     # --------------------------------------------------------
 
-    result_text = ""
+    records = []
 
     for row in results:
-        row_data = []
+
+        record = {}
 
         for column, value in zip(columns, row):
-            row_data.append(
-                f"{column}: {value}"
+            record[column] = value
+
+        records.append(record)
+
+    # --------------------------------------------------------
+    # Single result
+    # --------------------------------------------------------
+
+    if len(records) == 1:
+
+        record = records[0]
+
+        # ----------------------------------------------------
+        # Feeder result
+        # ----------------------------------------------------
+
+        if "feeder_id" in record:
+
+            feeder = record["feeder_id"]
+
+            if "power" in record:
+                return (
+                    f"Feeder {feeder} has a power "
+                    f"reading of {record['power']}."
+                )
+
+            if "voltage" in record:
+                return (
+                    f"Feeder {feeder} has a voltage "
+                    f"reading of {record['voltage']}."
+                )
+
+            if "current" in record:
+                return (
+                    f"Feeder {feeder} has a current "
+                    f"reading of {record['current']}."
+                )
+
+            if "energy_consumption" in record:
+                return (
+                    f"Feeder {feeder} has an energy "
+                    f"consumption of "
+                    f"{record['energy_consumption']}."
+                )
+
+        # ----------------------------------------------------
+        # Transformer result
+        # ----------------------------------------------------
+
+        if "transformer_id" in record:
+
+            transformer = record["transformer_id"]
+
+            if "power" in record:
+                return (
+                    f"Transformer {transformer} has a power "
+                    f"reading of {record['power']}."
+                )
+
+            if "voltage" in record:
+                return (
+                    f"Transformer {transformer} has a voltage "
+                    f"reading of {record['voltage']}."
+                )
+
+            if "current" in record:
+                return (
+                    f"Transformer {transformer} has a current "
+                    f"reading of {record['current']}."
+                )
+
+            if "energy_consumption" in record:
+                return (
+                    f"Transformer {transformer} has an energy "
+                    f"consumption of "
+                    f"{record['energy_consumption']}."
+                )
+
+        # ----------------------------------------------------
+        # Single aggregate value
+        # ----------------------------------------------------
+
+        if len(record) == 1:
+
+            column = columns[0]
+            value = record[column]
+
+            readable_name = column.replace(
+                "_",
+                " "
             )
 
-        result_text += (
-            ", ".join(row_data) + "\n"
+            return (
+                f"The {readable_name} is {value}."
+            )
+
+        # ----------------------------------------------------
+        # Generic single result
+        # ----------------------------------------------------
+
+        values = []
+
+        for column in columns:
+
+            readable_column = column.replace(
+                "_",
+                " "
+            )
+
+            values.append(
+                f"{readable_column}: {record[column]}"
+            )
+
+        return "The result is " + ", ".join(values) + "."
+
+    # --------------------------------------------------------
+    # Multiple results
+    # --------------------------------------------------------
+
+    lines = []
+
+    for record in records:
+
+        values = []
+
+        for column in columns:
+
+            readable_column = column.replace(
+                "_",
+                " "
+            )
+
+            values.append(
+                f"{readable_column}: {record[column]}"
+            )
+
+        lines.append(
+            " | ".join(values)
         )
 
-    # --------------------------------------------------------
-    # LLM prompt
-    # --------------------------------------------------------
-
-    prompt = f"""
-You are Smart Grid AI, an assistant for analyzing
-smart-grid power measurements.
-
-User question:
-{question}
-
-Database columns:
-{columns}
-
-Database results:
-{result_text}
-
-Generate a short, clear and professional answer.
-
-Rules:
-1. Answer only from the database results.
-2. Do not invent values.
-3. Do not mention SQL unless the user asks about SQL.
-4. Do not mention the LLM, model, prompt, or internal processing.
-5. Use the actual names and values from the database.
-6. Keep the answer concise.
-7. If there are multiple important results, summarize them clearly.
-8. Use appropriate units when they are available from the data.
-9. If the result is empty, clearly say that no matching records were found.
-"""
-
-    # --------------------------------------------------------
-    # Generate answer
-    # --------------------------------------------------------
-
-    response = chat(
-        model="llama3:8b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    return (
+        "Here are the matching smart-grid measurements:\n\n"
+        + "\n".join(lines)
     )
-
-    answer = response["message"]["content"].strip()
-
-    return answer
