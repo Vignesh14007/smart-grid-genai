@@ -1,9 +1,11 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor
 
 import streamlit as st
 
-from src.query_worker import process_question
+from llm_sql import generate_sql
+from query_engine import execute_query
+from src.sql_validator import clean_sql, validate_sql
+from src.answer_generator import generate_answer
 from src.dashboard import show_dashboard
 
 
@@ -33,6 +35,7 @@ st.set_page_config(
 
 # ============================================================
 # CUSTOM CSS
+# White + Sky Blue
 # ============================================================
 
 st.markdown(
@@ -67,8 +70,8 @@ st.markdown(
 
     .block-container {
         max-width: 900px;
-        padding-top: 2.5rem;
-        padding-bottom: 6rem;
+        padding-top: 3rem;
+        padding-bottom: 7rem;
     }
 
     header[data-testid="stHeader"] {
@@ -103,8 +106,29 @@ st.markdown(
             transparent
         );
 
-        margin: 1.5rem 0 1.5rem 0;
+        margin: 1.5rem 0 2rem 0;
     }
+
+    /* ========================================================
+       TABS
+       ======================================================== */
+
+    button[data-baseweb="tab"] {
+        color: #667085 !important;
+        font-weight: 600 !important;
+    }
+
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #1597d4 !important;
+    }
+
+    [data-baseweb="tab-highlight"] {
+        background-color: #1597d4 !important;
+    }
+
+    /* ========================================================
+       CHAT MESSAGES
+       ======================================================== */
 
     [data-testid="stChatMessage"] {
         border-radius: 18px;
@@ -142,6 +166,10 @@ st.markdown(
         color: #243044 !important;
     }
 
+    /* ========================================================
+       CHAT INPUT
+       ======================================================== */
+
     [data-testid="stChatInput"] {
         background: rgba(255, 255, 255, 0.82);
         border: 1px solid rgba(125, 211, 252, 0.65);
@@ -174,6 +202,10 @@ st.markdown(
         background: #087fb8 !important;
     }
 
+    /* ========================================================
+       EXPANDERS
+       ======================================================== */
+
     [data-testid="stExpander"] {
         border: 1px solid rgba(125, 211, 252, 0.45);
         border-radius: 14px;
@@ -200,6 +232,10 @@ st.markdown(
         border-radius: 14px;
     }
 
+    /* ========================================================
+       METRICS
+       ======================================================== */
+
     [data-testid="stMetric"] {
         background: rgba(255, 255, 255, 0.78);
         border: 1px solid rgba(186, 230, 253, 0.75);
@@ -217,6 +253,10 @@ st.markdown(
     [data-testid="stMetricValue"] {
         color: #172033 !important;
     }
+
+    /* ========================================================
+       SCROLLBAR
+       ======================================================== */
 
     ::-webkit-scrollbar {
         width: 7px;
@@ -247,28 +287,6 @@ st.markdown(
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-
-
-if "query_executor" not in st.session_state:
-    st.session_state.query_executor = ThreadPoolExecutor(
-        max_workers=1
-    )
-
-
-if "query_future" not in st.session_state:
-    st.session_state.query_future = None
-
-
-if "query_question" not in st.session_state:
-    st.session_state.query_question = None
-
-
-if "last_analytics" not in st.session_state:
-    st.session_state.last_analytics = None
-
-
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "💬 AI Assistant"
 
 
 # ============================================================
@@ -497,7 +515,7 @@ def is_smart_grid_question(question):
 
 
 # ============================================================
-# IRRELEVANT RESPONSE
+# IRRELEVANT QUESTION RESPONSE
 # ============================================================
 
 def irrelevant_response():
@@ -511,7 +529,7 @@ def irrelevant_response():
 
 
 # ============================================================
-# CONVERSATION CONTEXT
+# BUILD CONVERSATION CONTEXT
 # ============================================================
 
 def build_conversation_context():
@@ -543,124 +561,14 @@ def build_conversation_context():
 
 
 # ============================================================
-# PROCESS COMPLETED BACKGROUND QUERY
-# ============================================================
-
-def check_background_query():
-
-    future = st.session_state.query_future
-
-    if future is None:
-        return False
-
-    if not future.done():
-        return False
-
-    try:
-
-        result = future.result()
-
-        # ----------------------------------------------------
-        # Save chat response
-        # ----------------------------------------------------
-
-        st.session_state.chat_history.append(
-            {
-                "role": "assistant",
-                "content": result["answer"],
-                "sql": result["sql"],
-                "result": result["results"]
-            }
-        )
-
-        # ----------------------------------------------------
-        # Save analytics context
-        # ----------------------------------------------------
-
-        st.session_state.last_analytics = {
-            "question": result["question"],
-            "answer": result["answer"],
-            "sql": result["sql"],
-            "columns": result["columns"],
-            "results": result["results"]
-        }
-
-        # ----------------------------------------------------
-        # Clear background task
-        # ----------------------------------------------------
-
-        st.session_state.query_future = None
-        st.session_state.query_question = None
-
-        return True
-
-    except ValueError as error:
-
-        logger.warning(
-            "Validation error: %s",
-            error
-        )
-
-        error_message = (
-            "I couldn't process that request. "
-            "Please ask a question about the "
-            "smart-grid measurements."
-        )
-
-        st.session_state.chat_history.append(
-            {
-                "role": "assistant",
-                "content": error_message
-            }
-        )
-
-        st.session_state.query_future = None
-        st.session_state.query_question = None
-
-        return True
-
-    except Exception:
-
-        logger.exception(
-            "Background query failed"
-        )
-
-        error_message = (
-            "Something went wrong while processing "
-            "your request. Please try again."
-        )
-
-        st.session_state.chat_history.append(
-            {
-                "role": "assistant",
-                "content": error_message
-            }
-        )
-
-        st.session_state.query_future = None
-        st.session_state.query_question = None
-
-        return True
-
-
-# ============================================================
-# DISPLAY CHAT
+# AI ASSISTANT
 # ============================================================
 
 def show_chat():
 
-    # --------------------------------------------------------
-    # Check whether background query finished
-    # --------------------------------------------------------
-
-    if check_background_query():
-
-        st.rerun()
-
-
-    # --------------------------------------------------------
-    # Display chat history
-    # --------------------------------------------------------
+    # ========================================================
+    # DISPLAY PREVIOUS CHAT
+    # ========================================================
 
     for message in st.session_state.chat_history:
 
@@ -671,18 +579,14 @@ def show_chat():
             avatar="👤" if role == "user" else "⚡"
         ):
 
-            st.markdown(
-                message["content"]
-            )
+            st.markdown(message["content"])
 
             if (
                 role == "assistant"
                 and message.get("sql")
             ):
 
-                with st.expander(
-                    "View generated SQL"
-                ):
+                with st.expander("View generated SQL"):
 
                     st.code(
                         message["sql"],
@@ -694,9 +598,7 @@ def show_chat():
                 and message.get("result")
             ):
 
-                with st.expander(
-                    "View database result"
-                ):
+                with st.expander("View database result"):
 
                     st.dataframe(
                         message["result"],
@@ -705,37 +607,18 @@ def show_chat():
                     )
 
 
-    # --------------------------------------------------------
-    # Processing status
-    # --------------------------------------------------------
-
-    if st.session_state.query_future is not None:
-
-        st.info(
-            "⚡ Your question is being processed..."
-        )
-
-        st.caption(
-            "You can switch to Analytics. "
-            "The AI query will continue processing."
-        )
-
-
-    # --------------------------------------------------------
-    # Chat input
-    # --------------------------------------------------------
+    # ========================================================
+    # CHAT INPUT
+    # ========================================================
 
     question = st.chat_input(
-        "Ask about your smart-grid data...",
-        disabled=(
-            st.session_state.query_future is not None
-        )
+        "Ask about your smart-grid data..."
     )
 
 
-    # --------------------------------------------------------
-    # New question
-    # --------------------------------------------------------
+    # ========================================================
+    # PROCESS QUESTION
+    # ========================================================
 
     if question:
 
@@ -745,9 +628,21 @@ def show_chat():
             st.stop()
 
 
-        # ----------------------------------------------------
-        # Save user message
-        # ----------------------------------------------------
+        # ====================================================
+        # DISPLAY USER MESSAGE
+        # ====================================================
+
+        with st.chat_message(
+            "user",
+            avatar="👤"
+        ):
+
+            st.markdown(question)
+
+
+        # ====================================================
+        # SAVE USER MESSAGE
+        # ====================================================
 
         st.session_state.chat_history.append(
             {
@@ -757,15 +652,20 @@ def show_chat():
         )
 
 
-        # ----------------------------------------------------
-        # Greeting
-        # ----------------------------------------------------
+        # ====================================================
+        # GREETING CHECK
+        # ====================================================
 
         if is_greeting(question):
 
-            answer = greeting_response(
-                question
-            )
+            answer = greeting_response(question)
+
+            with st.chat_message(
+                "assistant",
+                avatar="⚡"
+            ):
+
+                st.markdown(answer)
 
             st.session_state.chat_history.append(
                 {
@@ -774,19 +674,24 @@ def show_chat():
                 }
             )
 
-            st.rerun()
+            st.stop()
 
 
-        # ----------------------------------------------------
-        # Domain validation
-        # ----------------------------------------------------
+        # ====================================================
+        # DOMAIN CHECK
+        # ====================================================
 
-        if not is_smart_grid_question(
-            question
-        ):
+        if not is_smart_grid_question(question):
 
             answer = irrelevant_response()
 
+            with st.chat_message(
+                "assistant",
+                avatar="⚡"
+            ):
+
+                st.markdown(answer)
+
             st.session_state.chat_history.append(
                 {
                     "role": "assistant",
@@ -794,120 +699,235 @@ def show_chat():
                 }
             )
 
-            st.rerun()
+            st.stop()
 
 
-        # ----------------------------------------------------
-        # Build context
-        # ----------------------------------------------------
+        # ====================================================
+        # MAIN PIPELINE
+        # ====================================================
 
-        conversation_context = (
-            build_conversation_context()
-        )
+        try:
 
-
-        # ----------------------------------------------------
-        # Start background processing
-        # ----------------------------------------------------
-
-        future = (
-            st.session_state
-            .query_executor
-            .submit(
-                process_question,
-                question,
-                conversation_context
+            conversation_context = (
+                build_conversation_context()
             )
-        )
 
-        st.session_state.query_future = future
 
-        st.session_state.query_question = (
-            question
-        )
+            # ------------------------------------------------
+            # Generate SQL
+            # ------------------------------------------------
 
-        st.rerun()
+            with st.chat_message(
+                "assistant",
+                avatar="⚡"
+            ):
+
+                with st.spinner(
+                    "Analyzing smart-grid data..."
+                ):
+
+                    sql = generate_sql(
+                        question,
+                        conversation_context
+                    )
+
+                    sql = clean_sql(sql)
+
+
+                # ------------------------------------------------
+                # Validate SQL
+                # ------------------------------------------------
+
+                validate_sql(sql)
+
+
+                # ------------------------------------------------
+                # Execute SQL
+                # ------------------------------------------------
+
+                with st.spinner(
+                    "Querying PostgreSQL..."
+                ):
+
+                    columns, results = execute_query(sql)
+
+
+                # ------------------------------------------------
+                # Generate answer
+                # ------------------------------------------------
+
+                with st.spinner(
+                    "Preparing the answer..."
+                ):
+
+                    answer = generate_answer(
+                        question,
+                        columns,
+                        results
+                    )
+
+
+                # ------------------------------------------------
+                # Display answer
+                # ------------------------------------------------
+
+                st.markdown(answer)
+
+
+                # ------------------------------------------------
+                # Generated SQL
+                # ------------------------------------------------
+
+                with st.expander(
+                    "View generated SQL"
+                ):
+
+                    st.code(
+                        sql,
+                        language="sql"
+                    )
+
+
+                # ------------------------------------------------
+                # Database result
+                # ------------------------------------------------
+
+                with st.expander(
+                    "View database result"
+                ):
+
+                    if results:
+
+                        st.dataframe(
+                            results,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+                    else:
+
+                        st.info(
+                            "No records found."
+                        )
+
+
+            # ------------------------------------------------
+            # Save complete interaction
+            # ------------------------------------------------
+
+            st.session_state.chat_history.append(
+                {
+                    "role": "assistant",
+                    "content": answer,
+                    "sql": sql,
+                    "result": results
+                }
+            )
+
+
+        # ====================================================
+        # VALIDATION / USER INPUT ERROR
+        # ====================================================
+
+        except ValueError as error:
+
+            logger.warning(
+                "Validation error while processing question: %s",
+                error
+            )
+
+            user_message = (
+                "I couldn't process that request. "
+                "Please ask a question about the smart-grid "
+                "measurements, such as power, voltage, current, "
+                "energy, feeders, or transformers."
+            )
+
+            with st.chat_message(
+                "assistant",
+                avatar="⚡"
+            ):
+
+                st.warning(user_message)
+
+            st.session_state.chat_history.append(
+                {
+                    "role": "assistant",
+                    "content": user_message
+                }
+            )
+
+
+        # ====================================================
+        # UNEXPECTED ERROR
+        # ====================================================
+
+        except Exception:
+
+            logger.exception(
+                "Unexpected error while processing request"
+            )
+
+            user_message = (
+                "Something went wrong while processing your "
+                "request. Please try again."
+            )
+
+            with st.chat_message(
+                "assistant",
+                avatar="⚡"
+            ):
+
+                st.error(user_message)
+
+            st.session_state.chat_history.append(
+                {
+                    "role": "assistant",
+                    "content": user_message
+                }
+            )
 
 
 # ============================================================
-# NAVIGATION
+# MAIN NAVIGATION
 # ============================================================
 
-selected_page = st.radio(
-    "View",
-    [
-        "💬 AI Assistant",
-        "📊 Analytics"
-    ],
-    horizontal=True,
-    key="current_page"
+chat_tab, analytics_tab = st.tabs(
+    ["💬 AI Assistant", "📊 Analytics"],
+    on_change="rerun"
 )
 
 
 # ============================================================
-# AI ASSISTANT
+# AI ASSISTANT TAB
 # ============================================================
 
-if selected_page == "💬 AI Assistant":
+if chat_tab.open:
 
-    show_chat()
+    with chat_tab:
+
+        show_chat()
 
 
 # ============================================================
-# ANALYTICS
+# ANALYTICS TAB
 # ============================================================
 
-elif selected_page == "📊 Analytics":
+if analytics_tab.open:
 
-    # --------------------------------------------------------
-    # Check background query
-    # --------------------------------------------------------
+    with analytics_tab:
 
-    query_finished = (
-        check_background_query()
-    )
+        try:
 
-    if query_finished:
+            show_dashboard()
 
-        st.success(
-            "✅ Your latest AI analysis is ready."
-        )
+        except Exception:
 
+            logger.exception(
+                "Analytics dashboard error"
+            )
 
-    # --------------------------------------------------------
-    # Processing indicator
-    # --------------------------------------------------------
-
-    if st.session_state.query_future is not None:
-
-        st.info(
-            "⚡ Your AI question is still processing "
-            "in the background."
-        )
-
-        st.caption(
-            "You can continue viewing the overall "
-            "grid analytics."
-        )
-
-
-    # --------------------------------------------------------
-    # Dashboard
-    # --------------------------------------------------------
-
-    try:
-
-        show_dashboard(
-            st.session_state.last_analytics
-        )
-
-    except Exception:
-
-        logger.exception(
-            "Analytics dashboard error"
-        )
-
-        st.error(
-            "Unable to load the analytics dashboard. "
-            "Please check the database connection."
-        )
+            st.error(
+                "Unable to load the analytics dashboard. "
+                "Please check the database connection."
+            )
