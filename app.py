@@ -30,6 +30,39 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ============================================================
+# AUTHENTICATION
+# ============================================================
+
+if not st.user.is_logged_in:
+
+    st.title("⚡ Smart Grid AI")
+
+    st.write(
+        "Please sign in with your Google account to continue."
+    )
+
+    st.button(
+        "Sign in with Google",
+        on_click=st.login
+    )
+
+    st.stop()
+
+
+# ============================================================
+# CURRENT USER
+# ============================================================
+
+google_sub = st.user.sub
+user_email = st.user.email
+user_name = st.user.name
+
+user_id = get_or_create_user(
+    google_sub,
+    user_email,
+    user_name
+)
 
 # ============================================================
 # CUSTOM CSS
