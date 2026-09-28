@@ -1,4 +1,13 @@
 import logging
+from src.chat_history import get_chat_history, save_chat
+from concurrent.futures import ThreadPoolExecutor
+
+import streamlit as st
+
+from src.query_worker import process_question
+from src.dashboard import show_dashboard
+from src.user_repository import get_or_create_user
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 import streamlit as st
@@ -273,10 +282,40 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+st.button(
+    "Logout",
+    on_click=st.logout
+)
 
 # ============================================================
 # SESSION STATE
 # ============================================================
+if "chat_history" not in st.session_state:
+    rows = get_chat_history(user_id)
+
+    st.session_state.chat_history = []
+
+    for row in reversed(rows):
+        chat_id, question, answer, generated_sql, created_at = row
+
+        st.session_state.chat_history.append(
+            {
+                "role": "user",
+                "content": question,
+                "chat_id": chat_id,
+                "created_at": created_at
+            }
+        )
+
+        st.session_state.chat_history.append(
+            {
+                "role": "assistant",
+                "content": answer,
+                "sql": generated_sql,
+                "chat_id": chat_id,
+                "created_at": created_at
+            }
+        )
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -605,7 +644,12 @@ def check_background_query():
                 "result": result["results"]
             }
         )
-
+        save_chat(
+            user_id=user_id,
+            question=result["question"],
+            answer=result["answer"],
+            generated_sql=result["sql"]
+        )
         # ----------------------------------------------------
         # Save analytics context
         # ----------------------------------------------------
@@ -652,7 +696,7 @@ def check_background_query():
 
         return True
 
-    except Exception:
+    except Exception as error:
 
         logger.exception(
             "Background query failed"
@@ -870,7 +914,7 @@ selected_page = st.radio(
     "View",
     [
         "💬 AI Assistant",
-        "📊 Analytics"
+        "🕘 Chat History",
     ],
     horizontal=True,
     key="current_page"
@@ -885,62 +929,49 @@ if selected_page == "💬 AI Assistant":
 
     show_chat()
 
-
 # ============================================================
-# ANALYTICS
+# CHAT HISTORY
 # ============================================================
 
-elif selected_page == "📊 Analytics":
+def show_chat_history():
 
-    # --------------------------------------------------------
-    # Check background query
-    # --------------------------------------------------------
-
-    query_finished = (
-        check_background_query()
+    st.markdown("## 🕘 Chat History")
+    st.caption(
+        "Your previous Smart Grid AI conversations."
     )
 
-    if query_finished:
+    history = get_chat_history(user_id)
 
-        st.success(
-            "✅ Your latest AI analysis is ready."
-        )
-
-
-    # --------------------------------------------------------
-    # Processing indicator
-    # --------------------------------------------------------
-
-    if st.session_state.query_future is not None:
-
+    if not history:
         st.info(
-            "⚡ Your AI question is still processing "
-            "in the background."
+            "No saved conversations yet. "
+            "Ask a question in AI Assistant to create your first one."
+        )
+        return
+
+    for chat_id, question, answer, generated_sql, created_at in history:
+
+        timestamp = created_at.strftime(
+            "%d %b %Y, %I:%M %p"
         )
 
-        st.caption(
-            "You can continue viewing the overall "
-            "grid analytics."
-        )
+        with st.expander(
+            f"💬 {question} — {timestamp}"
+        ):
 
+            st.markdown("**Question**")
+            st.write(question)
 
-    # --------------------------------------------------------
-    # Dashboard
-    # --------------------------------------------------------
+            st.markdown("**Answer**")
+            st.write(answer)
 
-    try:
+            if generated_sql:
+                with st.expander("🔍 Generated SQL"):
+                    st.code(
+                        generated_sql,
+                        language="sql"
+                    )
 
-        show_dashboard(
-            st.session_state.last_analytics
-        )
+if selected_page == "🕘 Chat History":
 
-    except Exception:
-
-        logger.exception(
-            "Analytics dashboard error"
-        )
-
-        st.error(
-            "Unable to load the analytics dashboard. "
-            "Please check the database connection."
-        )
+    show_chat_history()

@@ -76,7 +76,7 @@ Return ONLY SQL.
 """
 
     response = ollama.chat(
-        model="qwen2.5-coder:1.5b",
+        model="qwen2.5:3b",
         messages=[
             {
                 "role": "user",
